@@ -3,6 +3,8 @@
 #include <string>
 #include <cstdlib>
 #include <ctime>
+#include <windows.h> // For PlaySound
+#include <mmsystem.h> // For PlaySound
 
 using namespace std;
 
@@ -34,7 +36,7 @@ public:
 void populateVocabulary(vector<Category>& vocabulary)
 {
     Category animals("Animals");
-    animals.words = {"dog", "cat", "cow", "sheep", "bird", "fish", "horse", "duck", "lion", "tiger"};
+    animals.words = {"dog"}; // Adding only "dog" as the word
     vocabulary.push_back(animals);
 
     Category actions("Common Actions");
@@ -65,7 +67,11 @@ void typeMessage(const string& message, int delay = 50)
 
 void playVoice(const string& word)
 {
-    cout << "[Voice Playing]: " << word << endl;
+    // For now, only "dog.wav" will be played
+    if (word == "dog")
+    {
+        PlaySoundA("dog.wav", NULL, SND_FILENAME | SND_ASYNC); 
+    }
 }
 
 void displayMenu()
@@ -151,7 +157,7 @@ int main()
                     if (wordIndex >= 0 && wordIndex < vocabulary[categoryChoice].words.size())
                     {
                         string word = vocabulary[categoryChoice].words[wordIndex];
-                        playVoice(word);
+                        playVoice(word); // Play the sound for the selected word
                     }
                     else
                     {
