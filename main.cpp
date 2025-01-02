@@ -222,8 +222,6 @@ public:
     }
 };
 
-// [Continued from previous part...]
-
 class Category {
 public:
     string name;
@@ -307,8 +305,6 @@ void populateGrammarLessons(vector<GrammarLesson>& lessons) {
     presentContinuous.addExercise("I ___ (learn) Japanese this year.",
         "am learning");
     lessons.push_back(presentContinuous);
-
-    // Add more grammar lessons...
 }
 
 void populateReadingMaterials(vector<ReadingComprehension>& materials) {
@@ -340,8 +336,6 @@ void populateReadingMaterials(vector<ReadingComprehension>& materials) {
     story2.addQuestion("Where did John finally find the book?", "in the kitchen");
     story2.addQuestion("Who had taken the book?", "his little sister");
     materials.push_back(story2);
-
-    // Add more reading materials...
 }
 
 void populateVocabulary(vector<Category>& vocabulary) {
@@ -353,9 +347,7 @@ void populateVocabulary(vector<Category>& vocabulary) {
     mammals.addWord("lion", "King of the jungle, a large wild cat");
     mammals.addWord("elephant", "Largest land mammal with a trunk");
     mammals.addWord("dolphin", "Intelligent aquatic mammal");
-    // ... [Previous mammals words]
 
-    // Add grammar lessons specific to animal vocabulary
     GrammarLesson animalArticles("Articles with Animal Names",
         "Learn when to use 'a', 'an', and 'the' with animal names.");
     animalArticles.addExample("I saw an elephant at the zoo.",
@@ -365,9 +357,7 @@ void populateVocabulary(vector<Category>& vocabulary) {
     mammals.addGrammarLesson(animalArticles);
 
     animals.addSubCategory(mammals);
-    // ... [Add other animal subcategories]
 
-    // Add reading materials for animals category
     ReadingComprehension animalStory(
         "A Day at the Zoo",
         "Yesterday, I visited the zoo with my family. We saw many amazing "
@@ -485,7 +475,6 @@ void populateVocabulary(vector<Category>& vocabulary) {
     sports.addSubCategory(individualSports);
     vocabulary.push_back(sports);
 
-    // Add reading materials for each category
     ReadingComprehension professionStory(
         "A Day in the Hospital",
         "Dr. Sarah Thompson walked through the busy hospital corridors. She had been a surgeon for ten years now. "
@@ -610,9 +599,6 @@ void readingComprehensionSession(const ReadingComprehension& story) {
     cout << "\nPress Enter to continue...";
     cin.get();
 }
-
-// Main program
-// Constants for menu options
 
 // Function to display main menu and get user choice
 int displayMainMenu() {
