@@ -17,17 +17,150 @@ class UserProgress;
 class GrammarLesson;
 class ReadingComprehension;
 
-// User progress tracking
+// Achievement System
+class Achievement {
+public:
+    string name;
+    string description;
+    bool unlocked;
+    int pointsReward;
+
+    Achievement(string n, string desc, int points)
+        : name(n), description(desc), unlocked(false), pointsReward(points) {}
+};
+
+// User Level System
+class UserLevel {
+public:
+    int level;
+    int currentExp;
+    int expToNextLevel;
+    int totalPoints;
+    int streak;
+    string rank;
+
+    UserLevel() : level(1), currentExp(0), expToNextLevel(100),
+                 totalPoints(0), streak(0), rank("Beginner") {}
+
+    void addExperience(int exp) {
+        currentExp += exp;
+        while (currentExp >= expToNextLevel) {
+            levelUp();
+        }
+    }
+
+    void levelUp() {
+        level++;
+        currentExp -= expToNextLevel;
+        expToNextLevel = 100 * level; // Increases exp needed for each level
+        updateRank();
+    }
+
+    void updateRank() {
+        if (level < 5) rank = "Beginner";
+        else if (level < 10) rank = "Intermediate";
+        else if (level < 15) rank = "Advanced";
+        else if (level < 20) rank = "Expert";
+        else rank = "Master";
+    }
+
+    void incrementStreak() {
+        streak++;
+        if (streak % 7 == 0) { // Weekly streak bonus
+            addExperience(50);
+            totalPoints += 100;
+        }
+    }
+
+    void resetStreak() {
+        streak = 0;
+    }
+};
+
+// Skill Tree Node
+class SkillNode {
+public:
+    string name;
+    string description;
+    bool unlocked;
+    vector<SkillNode*> prerequisites;
+    vector<string> content;
+    string difficulty;
+
+    SkillNode(string n, string desc, string diff)
+        : name(n), description(desc), unlocked(false), difficulty(diff) {}
+
+    bool canUnlock() {
+        if (prerequisites.empty()) return true;
+        return all_of(prerequisites.begin(), prerequisites.end(),
+                     [](SkillNode* pre) { return pre->unlocked; });
+    }
+};
+
+// Extended Word class with pronunciation
+class Word {
+public:
+    string word;
+    string meaning;
+    string pronunciation;
+    string partOfSpeech;
+    vector<string> examples;
+    vector<string> translations;
+
+    Word(string w, string m, string pron)
+        : word(w), meaning(m), pronunciation(pron) {}
+
+    void addExample(const string& example) {
+        examples.push_back(example);
+    }
+
+    void addTranslation(const string& translation) {
+        translations.push_back(translation);
+    }
+
+    void display() const {
+        cout << "Word: " << word << endl;
+        cout << "Pronunciation: " << pronunciation << endl;
+        cout << "Meaning: " << meaning << endl;
+        if (!partOfSpeech.empty())
+            cout << "Part of Speech: " << partOfSpeech << endl;
+
+        if (!examples.empty()) {
+            cout << "Examples:" << endl;
+            for (const auto& example : examples) {
+                cout << "- " << example << endl;
+            }
+        }
+
+        if (!translations.empty()) {
+            cout << "Translations:" << endl;
+            for (const auto& trans : translations) {
+                cout << "- " << trans << endl;
+            }
+        }
+    }
+};
+
 class UserProgress {
 public:
     string username;
-    map<string, int> wordProgress;  // Word -> number of correct reviews
+    map<string, int> wordProgress;
     map<string, chrono::system_clock::time_point> nextReview;
+    vector<Achievement> achievements;
+    vector<SkillNode*> unlockedSkills;
     int dailyGoal;
     int wordsLearnedToday;
     vector<string> completedLessons;
+    chrono::system_clock::time_point lastLoginTime;
+    UserLevel level;
 
-    UserProgress(const string& name) : username(name), dailyGoal(10), wordsLearnedToday(0) {}
+    UserProgress(const string& name)
+        : username(name),
+          dailyGoal(10),
+          wordsLearnedToday(0),
+          lastLoginTime(chrono::system_clock::now()) {
+        initializeAchievements();
+    }
 
     void updateWordProgress(const string& word) {
         wordProgress[word]++;
@@ -48,21 +181,133 @@ public:
 
     void saveToDisk() {
         ofstream file(username + "_progress.txt");
+
+        // Save basic stats
+        file << dailyGoal << endl;
+        file << wordsLearnedToday << endl;
+        file << level.level << endl;
+        file << level.currentExp << endl;
+        file << level.streak << endl;
+
+        // Save the last login timestamp
+        auto timestamp = chrono::system_clock::to_time_t(lastLoginTime);
+        file << timestamp << endl;
+
+        // Save word progress
+        file << wordProgress.size() << endl;
         for (const auto& pair : wordProgress) {
             file << pair.first << "," << pair.second << endl;
+        }
+
+        // Save completed lessons
+        file << completedLessons.size() << endl;
+        for (const auto& lesson : completedLessons) {
+            file << lesson << endl;
         }
     }
 
     void loadFromDisk() {
         ifstream file(username + "_progress.txt");
-        string line;
-        while (getline(file, line)) {
+        if (!file.is_open()) return;
+
+        // Load basic stats
+        file >> dailyGoal;
+        file >> wordsLearnedToday;
+        file >> level.level;
+        file >> level.currentExp;
+        file >> level.streak;
+
+        // Load last login time
+        time_t timestamp;
+        file >> timestamp;
+        lastLoginTime = chrono::system_clock::from_time_t(timestamp);
+
+        // Skip the newline
+        file.ignore();
+
+        // Load word progress
+        int wordCount;
+        file >> wordCount;
+        file.ignore(); // Skip newline
+
+        for (int i = 0; i < wordCount; i++) {
+            string line;
+            getline(file, line);
             stringstream ss(line);
             string word;
             int progress;
             getline(ss, word, ',');
             ss >> progress;
             wordProgress[word] = progress;
+        }
+
+        // Load completed lessons
+        int lessonCount;
+        file >> lessonCount;
+        file.ignore(); // Skip newline
+
+        for (int i = 0; i < lessonCount; i++) {
+            string lesson;
+            getline(file, lesson);
+            completedLessons.push_back(lesson);
+        }
+
+        // Update level rank after loading
+        level.updateRank();
+    }
+
+    void initializeAchievements() {
+        achievements.push_back(Achievement("First Steps", "Complete your first lesson", 50));
+        achievements.push_back(Achievement("Word Master", "Learn 100 words", 100));
+        achievements.push_back(Achievement("Grammar Expert", "Complete 10 grammar lessons", 150));
+        achievements.push_back(Achievement("Dedicated Learner", "Maintain a 7-day streak", 200));
+        achievements.push_back(Achievement("Polyglot", "Complete translations in multiple languages", 250));
+    }
+
+    void checkAchievements() {
+        // Check for First Steps
+        if (!achievements[0].unlocked && !completedLessons.empty()) {
+            unlockAchievement(0);
+        }
+        // Check for Word Master
+        if (!achievements[1].unlocked && wordProgress.size() >= 100) {
+            unlockAchievement(1);
+        }
+        // Check for Grammar Expert
+        if (!achievements[2].unlocked && completedLessons.size() >= 10) {
+            unlockAchievement(2);
+        }
+        // Check for Dedicated Learner
+        if (!achievements[3].unlocked && level.streak >= 7) {
+            unlockAchievement(3);
+        }
+    }
+
+    void unlockAchievement(int index) {
+        if (!achievements[index].unlocked) {
+            achievements[index].unlocked = true;
+            level.addExperience(achievements[index].pointsReward);
+            level.totalPoints += achievements[index].pointsReward;
+
+            cout << "\n*** Achievement Unlocked! ***" << endl;
+            cout << achievements[index].name << ": " << achievements[index].description << endl;
+            cout << "Reward: " << achievements[index].pointsReward << " points!" << endl;
+        }
+    }
+
+    void displayProgress() const {
+        cout << "\n=== Progress Report for " << username << " ===" << endl;
+        cout << "Level: " << level.level << " (" << level.rank << ")" << endl;
+        cout << "Experience: " << level.currentExp << "/" << level.expToNextLevel << endl;
+        cout << "Total Points: " << level.totalPoints << endl;
+        cout << "Current Streak: " << level.streak << " days" << endl;
+        cout << "\nWords Learned: " << wordProgress.size() << endl;
+        cout << "Lessons Completed: " << completedLessons.size() << endl;
+
+        cout << "\nAchievements:" << endl;
+        for (const auto& achievement : achievements) {
+            cout << (achievement.unlocked ? "[X] " : "[ ] ")
+                 << achievement.name << " - " << achievement.description << endl;
         }
     }
 };
@@ -110,6 +355,47 @@ public:
                 cout << "Keep practicing. The correct answer is: " << exercises[i].second << "\n";
             }
         }
+    }
+};
+
+// Translation Exercise class
+class TranslationExercise {
+public:
+    Word word;
+    vector<string> options;
+    string correctTranslation;
+    string targetLanguage;
+
+    TranslationExercise(const Word& w, const vector<string>& opt,
+                       const string& correct, const string& lang)
+        : word(w), options(opt), correctTranslation(correct), targetLanguage(lang) {}
+
+    bool practice() {
+        cout << "\nTranslate '" << word.word << "' to " << targetLanguage << ":" << endl;
+        cout << "Meaning: " << word.meaning << endl;
+
+        for (size_t i = 0; i < options.size(); ++i) {
+            cout << i + 1 << ". " << options[i] << endl;
+        }
+
+        cout << "\nYour choice (1-" << options.size() << "): ";
+        string input;
+        getline(cin, input);
+
+        if (isdigit(input[0])) {
+            int choice = stoi(input) - 1;
+            if (choice >= 0 && choice < options.size()) {
+                bool correct = options[choice] == correctTranslation;
+                if (correct) {
+                    cout << "\nCorrect! Well done!" << endl;
+                } else {
+                    cout << "\nIncorrect. The correct translation is: "
+                         << correctTranslation << endl;
+                }
+                return correct;
+            }
+        }
+        return false;
     }
 };
 
@@ -348,6 +634,7 @@ void populateVocabulary(vector<Category>& vocabulary) {
     mammals.addWord("elephant", "Largest land mammal with a trunk");
     mammals.addWord("dolphin", "Intelligent aquatic mammal");
 
+    // Add grammar lessons specific to animal vocabulary
     GrammarLesson animalArticles("Articles with Animal Names",
         "Learn when to use 'a', 'an', and 'the' with animal names.");
     animalArticles.addExample("I saw an elephant at the zoo.",
@@ -358,6 +645,7 @@ void populateVocabulary(vector<Category>& vocabulary) {
 
     animals.addSubCategory(mammals);
 
+    // Add reading materials for animals category
     ReadingComprehension animalStory(
         "A Day at the Zoo",
         "Yesterday, I visited the zoo with my family. We saw many amazing "
@@ -475,6 +763,7 @@ void populateVocabulary(vector<Category>& vocabulary) {
     sports.addSubCategory(individualSports);
     vocabulary.push_back(sports);
 
+    // Add reading materials for each category
     ReadingComprehension professionStory(
         "A Day in the Hospital",
         "Dr. Sarah Thompson walked through the busy hospital corridors. She had been a surgeon for ten years now. "
@@ -544,17 +833,6 @@ void populateVocabulary(vector<Category>& vocabulary) {
     sports.addReadingMaterial(sportsStory);
 }
 
-// Main menu options
-enum MainMenuOption {
-    STUDY_VOCABULARY = 1,
-    PRACTICE_GRAMMAR,
-    READ_STORIES,
-    VIEW_PROGRESS,
-    SET_GOALS,
-    EXIT
-};
-
-
 // Function to handle vocabulary study session
 void studyVocabularySession(const Category& category, SubCategory& subCategory, UserProgress& progress) {
     while (true) {
@@ -600,22 +878,34 @@ void readingComprehensionSession(const ReadingComprehension& story) {
     cin.get();
 }
 
-// Function to display main menu and get user choice
+void displayMenu() {
+    cout << "==========================" << endl;
+    cout << "          LEXIMO          " << endl;
+    cout << " The English Learning App " << endl;
+    cout << "==========================" << endl;
+}
+
 int displayMainMenu() {
     const int STUDY_VOCABULARY = 1;
-const int PRACTICE_GRAMMAR = 2;
-const int READ_STORIES = 3;
-const int VIEW_PROGRESS = 4;
-const int SET_GOALS = 5;
-const int EXIT = 6;
+    const int PRACTICE_GRAMMAR = 2;
+    const int READ_STORIES = 3;
+    const int PRACTICE_TRANSLATION = 4;
+    const int VIEW_SKILL_TREE = 5;
+    const int VIEW_ACHIEVEMENTS = 6;
+    const int VIEW_PROGRESS = 7;
+    const int SET_GOALS = 8;
+    const int EXIT = 9;
     system("cls");
     cout << "\n=== LEXIMO MAIN MENU ===\n\n";
     cout << "1. Study Vocabulary\n";
     cout << "2. Practice Grammar\n";
     cout << "3. Read Stories\n";
-    cout << "4. View Progress\n";
-    cout << "5. Set Daily Goals\n";
-    cout << "6. Exit\n\n";
+    cout << "4. Practice Translations\n";
+    cout << "5. View Skill Tree\n";
+    cout << "6. View Achievements\n";
+    cout << "7. View Progress\n";
+    cout << "8. Set Daily Goals\n";
+    cout << "9. Exit\n\n";
     cout << "Enter your choice: ";
 
     string input;
@@ -627,13 +917,140 @@ const int EXIT = 6;
     return input[0] - '0';
 }
 
-void displayMenu() {
-    cout << "==========================" << endl;
-    cout << "          LEXIMO          " << endl;
-    cout << " The English Learning App " << endl;
-    cout << "==========================" << endl;
+void displayPronunciationGuide() {
+    cout << "\n=== Pronunciation Guide ===" << endl;
+    cout << "Common Symbols:" << endl;
+    cout << "æ - as in 'cat'" << endl;
+    cout << "ə - as in 'about'" << endl;
+    cout << "ʃ - as in 'ship'" << endl;
+    cout << "θ - as in 'think'" << endl;
+    cout << "ð - as in 'this'" << endl;
+    cout << "\nPress Enter to continue...";
+    cin.get();
 }
 
+void practiceTranslation(vector<TranslationExercise>& exercises, UserProgress& progress) {
+    while (true) {
+        system("cls");
+        cout << "\n=== Translation Practice ===" << endl;
+        cout << "Available exercises:\n";
+
+        for (size_t i = 0; i < exercises.size(); ++i) {
+            cout << i + 1 << ". " << exercises[i].word.word
+                 << " (" << exercises[i].targetLanguage << ")" << endl;
+        }
+
+        cout << "\nEnter exercise number (or 'back'): ";
+        string input;
+        getline(cin, input);
+
+        if (input == "back")
+            break;
+
+        if (isdigit(input[0])) {
+            int choice = stoi(input) - 1;
+            if (choice >= 0 && choice < exercises.size()) {
+                system("cls");
+                bool correct = exercises[choice].practice();
+                if (correct) {
+                    progress.level.addExperience(10);
+                    progress.level.totalPoints += 5;
+                    progress.checkAchievements();
+                }
+                cout << "\nPress Enter to continue...";
+                cin.get();
+            }
+        }
+    }
+}
+
+void studyWord(const Word& word, UserProgress& progress) {
+    system("cls");
+    word.display();
+    cout << "\nPronunciation Guide:" << endl;
+    cout << "IPA: " << word.pronunciation << endl;
+    cout << "\nPress 1 to mark as learned, or Enter to continue: ";
+
+    string input;
+    getline(cin, input);
+
+    if (input == "1") {
+        progress.wordProgress[word.word]++;
+        progress.wordsLearnedToday++;
+        progress.level.addExperience(5);
+        progress.level.totalPoints += 2;
+        progress.checkAchievements();
+        cout << "\nWord marked as learned! +5 XP" << endl;
+        cout << "Press Enter to continue...";
+        cin.get();
+    }
+}
+
+// Helper Functions
+void initializeSkillTree(vector<SkillNode*>& skillTree) {
+    // Basic Skills
+    SkillNode* basicVocab = new SkillNode("Basic Vocabulary",
+        "Learn essential everyday words", "Beginner");
+    SkillNode* basicGrammar = new SkillNode("Basic Grammar",
+        "Understand simple sentence structures", "Beginner");
+
+    // Intermediate Skills
+    SkillNode* intermediateVocab = new SkillNode("Intermediate Vocabulary",
+        "Expand your vocabulary with more complex words", "Intermediate");
+    SkillNode* intermediateGrammar = new SkillNode("Intermediate Grammar",
+        "Learn compound and complex sentences", "Intermediate");
+
+    // Advanced Skills
+    SkillNode* advancedVocab = new SkillNode("Advanced Vocabulary",
+        "Master academic and specialized vocabulary", "Advanced");
+    SkillNode* advancedGrammar = new SkillNode("Advanced Grammar",
+        "Master complex grammatical structures", "Advanced");
+
+    // Set prerequisites
+    intermediateVocab->prerequisites.push_back(basicVocab);
+    intermediateGrammar->prerequisites.push_back(basicGrammar);
+    advancedVocab->prerequisites.push_back(intermediateVocab);
+    advancedGrammar->prerequisites.push_back(intermediateGrammar);
+
+    // Add to skill tree
+    skillTree = {basicVocab, basicGrammar, intermediateVocab,
+                intermediateGrammar, advancedVocab, advancedGrammar};
+
+    // Basic vocab is unlocked by default
+    basicVocab->unlocked = true;
+    basicGrammar->unlocked = true;
+}
+
+void displaySkillTree(const vector<SkillNode*>& skillTree) {
+    cout << "\n=== Skill Tree ===" << endl;
+    for (const auto& skill : skillTree) {
+        cout << (skill->unlocked ? "[X] " : "[ ] ")
+             << skill->name << " (" << skill->difficulty << ")" << endl;
+        cout << "    " << skill->description << endl;
+        if (!skill->prerequisites.empty()) {
+            cout << "    Prerequisites: ";
+            for (const auto& pre : skill->prerequisites) {
+                cout << pre->name << ", ";
+            }
+            cout << endl;
+        }
+        cout << endl;
+    }
+}
+
+void initializeTranslationExercises(vector<TranslationExercise>& exercises) {
+    // Spanish translations
+    vector<string> options1 = {"perro", "gato", "pájaro", "pez"};
+    Word dog("dog", "A faithful pet animal", "/dɔg/");
+    dog.addExample("The dog is playing in the garden.");
+    exercises.push_back(TranslationExercise(dog, options1, "perro", "Spanish"));
+
+    // French translations
+    vector<string> options2 = {"livre", "stylo", "cahier", "crayon"};
+    Word book("book", "A written or printed work", "/bʊk/");
+    book.addExample("I'm reading an interesting book.");
+    exercises.push_back(TranslationExercise(book, options2, "livre", "French"));
+}
 
 int main() {
     displayMenu();
@@ -671,10 +1088,20 @@ int main() {
     UserProgress userProgress(firstName);
     userProgress.loadFromDisk();
 
+    vector<SkillNode*> skillTree;
+    initializeSkillTree(skillTree);
+
+    vector<TranslationExercise> translationExercises;
+    initializeTranslationExercises(translationExercises);
+
+    chrono::system_clock::time_point lastLoginTime;
+
+
+
     while (true) {
         int choice = displayMainMenu();
 
-        if (choice == STUDY_VOCABULARY) {
+        if (choice == 1) {
             while (true) {
                 system("cls");
                 cout << "\nChoose a category:\n\n";
@@ -719,7 +1146,7 @@ int main() {
                 }
             }
         }
-        else if (choice == PRACTICE_GRAMMAR) {
+        else if (choice == 2) {
             while (true) {
                 system("cls");
                 cout << "\nGrammar Lessons:\n\n";
@@ -749,7 +1176,7 @@ int main() {
                 }
             }
         }
-        else if (choice == READ_STORIES) {
+        else if (choice == 3) {
             while (true) {
                 system("cls");
                 cout << "\nChoose a category for reading:\n\n";
@@ -789,17 +1216,34 @@ int main() {
                 }
             }
         }
-        else if (choice == VIEW_PROGRESS) {
+
+        else if (choice == 4) {
+            practiceTranslation(translationExercises, userProgress);
+        }
+        else if (choice == 5) {
             system("cls");
-            displayDailyProgress(userProgress);
-            cout << "\nCompleted Lessons:" << endl;
-            for (const auto& lesson : userProgress.completedLessons) {
-                cout << "- " << lesson << endl;
+            displaySkillTree(skillTree);
+            cout << "\nPress Enter to continue...";
+            cin.get();
+        }
+        else if (choice == 6) {
+            system("cls");
+            cout << "\n=== Achievements ===" << endl;
+            for (const auto& achievement : userProgress.achievements) {
+                cout << (achievement.unlocked ? "[X] " : "[ ] ")
+                     << achievement.name << " - " << achievement.description
+                     << " (" << achievement.pointsReward << " points)" << endl;
             }
             cout << "\nPress Enter to continue...";
             cin.get();
         }
-        else if (choice == SET_GOALS) {
+        else if (choice == 7) {
+            system("cls");
+            userProgress.displayProgress();
+            cout << "\nPress Enter to continue...";
+            cin.get();
+        }
+        else if (choice == 8) {
             system("cls");
             cout << "Current daily goal: " << userProgress.dailyGoal << " words\n";
             cout << "Enter new daily goal: ";
@@ -812,7 +1256,7 @@ int main() {
             cout << "\nPress Enter to continue...";
             cin.get();
         }
-        else if (choice == EXIT) {
+        else if (choice == 9) {
             userProgress.saveToDisk();
             typeMessage("Thank you for using Leximo! Have a great day ahead, " + firstName + "!");
             customSleep(1000);
@@ -822,6 +1266,25 @@ int main() {
             cout << "Invalid choice. Please try again.\n";
             customSleep(1000);
         }
+
+
+        // Check and update streak
+        auto now = chrono::system_clock::now();
+        auto duration = chrono::duration_cast<chrono::hours>(
+            now - userProgress.lastLoginTime).count();
+
+        if (duration <= 24) {
+            userProgress.level.incrementStreak();
+        } else {
+            userProgress.level.resetStreak();
+        }
+
+        userProgress.lastLoginTime = now;
+        userProgress.checkAchievements();
+        userProgress.saveToDisk();
+    }
+     for (auto* skill : skillTree) {
+        delete skill;
     }
 
     return 0;
