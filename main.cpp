@@ -18,6 +18,31 @@
 
 using namespace std;
 
+
+int proficiency;
+void playAudio1(const string& fileName)
+{
+    sf::SoundBuffer buffer;
+    sf::Sound sound;
+
+    // Load the audio file
+    if (!buffer.loadFromFile(fileName))
+    {
+        cerr << "Error: Could not load audio file '" << fileName << "'" << endl;
+        return;
+    }
+
+    // Set the buffer and play the sound
+    sound.setBuffer(buffer);
+    sound.play();
+
+    // Wait until the audio finishes playing
+    while (sound.getStatus() == sf::Sound::Playing)
+    {
+        this_thread::sleep_for(chrono::milliseconds(100));
+    }
+}
+
 struct Message {
     string text;
     string audioFile;
@@ -135,6 +160,54 @@ void displayLogo() {
     gotoRowCol(centerRow + 4, centerCol - 10);
 }
 
+class FlashcardQuiz {
+private:
+    // Map to store words and their translations
+    map<string, string> flashcards;
+
+public:
+    FlashcardQuiz() {
+        // Adding words and their translations (English -> Spanish)
+        flashcards["apple"] = "manzana";
+        flashcards["banana"] = "plátano";
+        flashcards["orange"] = "naranja";
+        flashcards["grape"] = "uva";
+        flashcards["cherry"] = "cereza";
+    }
+
+    // Function to start the flashcard quiz game
+    void startQuiz() {
+        srand(time(0)); // Seed random number generator
+        int score = 0;
+        int totalQuestions = flashcards.size();
+
+        cout << "Welcome to the Flashcard Quiz Game!\n";
+        cout << "Translate the following words into Spanish:\n";
+
+        // Randomly shuffle flashcards
+        for (int i = 0; i < totalQuestions; i++) {
+            auto it = flashcards.begin();
+            advance(it, rand() % flashcards.size());  // Randomly select a word
+            string englishWord = it->first;
+            string correctTranslation = it->second;
+
+            cout << "What is the Spanish translation for '" << englishWord << "'?\n";
+            string userGuess;
+            cin >> userGuess;
+
+            // Check if the guess is correct
+            if (userGuess == correctTranslation) {
+                cout << "Correct!\n";
+                score += 10;
+            } else {
+                cout << "Wrong! The correct translation is: " << correctTranslation << "\n";
+            }
+        }
+
+        cout << "Game Over! Your score is: " << score << endl;
+    }
+};
+
 class AudioManager {
 private:
     AudioHashTable audioFiles;
@@ -231,103 +304,208 @@ public:
     }
 };
 
-// Question Bank using Binary Search Tree and Linked Lists
-class QuestionBank {
-private:
-    struct QuestionList {
-        Question data;
-        QuestionList* next;
-        QuestionList(Question q) : data(q), next(nullptr) {}
-    };
+// ProficiencyQuestion struct to hold question data
+struct ProficiencyQuestion {
+    string text;
+    vector<string> options;
+    int correctAnswer;
+    int questionNumber;    // Added to identify which audio file to play
+    int proficiencyLevel;  // 1-5 matching user's proficiency
+};
 
-    QuestionTreeNode* root;
-    QuestionList* difficultyLists[5];  // Array of linked lists for each difficulty level
-    
-    void insertIntoTree(QuestionTreeNode*& node, Question q) {
-        if (node == nullptr) {
-            node = new QuestionTreeNode(q);
-            return;
-        }
-        
-        if (q.difficulty < node->data.difficulty) {
-            insertIntoTree(node->left, q);
-        } else {
-            insertIntoTree(node->right, q);
-        }
-    }
-    
-    void insertIntoList(int difficulty, Question q) {
-        QuestionList* newNode = new QuestionList(q);
-        newNode->next = difficultyLists[difficulty - 1];
-        difficultyLists[difficulty - 1] = newNode;
+// Class to manage questions based on proficiency
+class ProficiencyQuestionManager {
+private:
+    map<int, queue<ProficiencyQuestion>> questionsByLevel;
+
+    void initializeQuestions() {
+        // Level 1 Questions (New to English)
+        questionsByLevel[1].push(ProficiencyQuestion{
+            "Select the correct word: This is _ book.",
+            {"a", "an", "the"},
+            1,
+            1,  // Question number 1
+            1   // Proficiency level
+        });
+        questionsByLevel[1].push(ProficiencyQuestion{
+            "Choose the correct greeting: Good ___",
+            {"morning", "morgning", "mornin"},
+            1,
+            2,  // Question number 2
+            1
+        });
+
+        // Level 2 Questions (Common Words)
+        questionsByLevel[2].push(ProficiencyQuestion{
+            "Complete the sentence: She ___ to school every day.",
+            {"goes", "go", "going"},
+            1,
+            3,
+            2
+        });
+        questionsByLevel[2].push(ProficiencyQuestion{
+            "Choose the correct word: The weather is ___ today.",
+            {"sunny", "sun", "sunned"},
+            1,
+            4,
+            2
+        });
+
+        // Level 3 Questions (Basic Conversations)
+        questionsByLevel[3].push(ProficiencyQuestion{
+            "Select the appropriate response: 'How are you?' '___'",
+            {"I'm doing well, thank you", "Yes, I am", "No, thanks"},
+            1,
+            5,
+            3
+        });
+        questionsByLevel[3].push(ProficiencyQuestion{
+            "Choose the correct form: I ___ my homework yesterday.",
+            {"did", "done", "doing"},
+            1,
+            6,
+            3
+        });
+
+        // Level 4 Questions (Various Topics)
+        questionsByLevel[4].push(ProficiencyQuestion{
+            "Complete: If I ___ more time, I would travel more.",
+            {"had", "have", "having"},
+            1,
+            7,
+            4
+        });
+        questionsByLevel[4].push(ProficiencyQuestion{
+            "Select the correct phrase: Despite ___ hard, he failed the exam.",
+            {"studying", "studied", "study"},
+            1,
+            8,
+            4
+        });
+
+        // Level 5 Questions (Advanced Topics)
+        questionsByLevel[5].push(ProficiencyQuestion{
+            "Choose the correct form: The manuscript ___ by the time the publisher arrives.",
+            {"will have been completed", "will complete", "will be completing"},
+            1,
+            9,
+            5
+        });
+        questionsByLevel[5].push(ProficiencyQuestion{
+            "Select the appropriate academic phrase: The research ___ significant findings.",
+            {"yielded", "gave", "made"},
+            1,
+            10,
+            5
+        });
     }
 
 public:
-    QuestionBank() : root(nullptr) {
-        for (int i = 0; i < 5; i++) {
-            difficultyLists[i] = nullptr;
-        }
+    ProficiencyQuestionManager() {
         initializeQuestions();
     }
-    
-    void addQuestion(Question q) {
-        insertIntoTree(root, q);
-        insertIntoList(q.difficulty, q);
-    }
-    
-    void initializeQuestions() {
-        // Add sample questions for each difficulty level
-        // Beginner level (1) questions
-        vector<Question> questions = {
-            {"What is the correct article? _ apple", {"a", "an", "the"}, 2, "apple_article.wav", false, 1},
-            {"Listen and repeat: Hello", {}, 1, "hello.wav", true, 1},
-            {"Complete the sentence: Good __ ! (morning greeting)", {"night", "morning", "evening"}, 2, "morning_greet.wav", false, 1},
-            
-            // Intermediate level (3) questions
-            {"Choose the correct form: If it _ tomorrow, I will stay home", {"rains", "rain", "raining"}, 1, "if_clause.wav", false, 3},
-            {"Listen and repeat: Opportunity", {}, 1, "opportunity.wav", true, 3},
-            {"Select the correct word: She _ to the store yesterday", {"gone", "went", "going"}, 2, "past_tense.wav", false, 3},
-            
-            // Advanced level (5) questions
-            {"Choose: Despite _ early, we missed the train", {"leaving", "left", "leave"}, 1, "despite_clause.wav", false, 5},
-            {"Listen and pronounce: Particularly difficult", {}, 1, "difficult_phrase.wav", true, 5},
-            {"Complete: The report _ by tomorrow morning", {"will finish", "will be finished", "finishing"}, 2, "passive_future.wav", false, 5}
-        };
+
+    queue<ProficiencyQuestion> getQuestionsByProficiency(int proficiencyLevel, int questionCount) {
+        queue<ProficiencyQuestion> selectedQuestions;
         
-        for (const Question& q : questions) {
-            addQuestion(q);
+        // Get questions from current level and one level below (if available)
+        int lowerLevel = max(1, proficiencyLevel - 1);
+        
+        // Determine how many questions to take from each level
+        int currentLevelCount = questionCount / 2;
+        int lowerLevelCount = questionCount - currentLevelCount;
+
+        // Add questions from current level
+        queue<ProficiencyQuestion> currentLevel = questionsByLevel[proficiencyLevel];
+        for(int i = 0; i < currentLevelCount && !currentLevel.empty(); i++) {
+            selectedQuestions.push(currentLevel.front());
+            currentLevel.pop();
         }
-    }
-    
-    vector<Question> getQuestionsByProficiency(int proficiency, int count) {
-        vector<Question> result;
-        
-        // Convert proficiency to difficulty level
-        int difficulty = (proficiency <= 2) ? 1 : (proficiency <= 4) ? 3 : 5;
-        
-        // Get questions from the appropriate difficulty list
-        QuestionList* current = difficultyLists[difficulty - 1];
-        while (current != nullptr && result.size() < count) {
-            result.push_back(current->data);
-            current = current->next;
+
+        // Add questions from lower level
+        queue<ProficiencyQuestion> lowerLevelQ = questionsByLevel[lowerLevel];
+        for(int i = 0; i < lowerLevelCount && !lowerLevelQ.empty(); i++) {
+            selectedQuestions.push(lowerLevelQ.front());
+            lowerLevelQ.pop();
         }
-        
-        // If we don't have enough questions, add default ones
-        while (result.size() < count) {
-            Question defaultQ = {
-                "What is the meaning of 'Hello'?",
-                {"A greeting", "A farewell", "A question"},
-                1,
-                "hello.wav",
-                false,
-                difficulty
-            };
-            result.push_back(defaultQ);
-        }
-        
-        return result;
+
+        return selectedQuestions;
     }
 };
+
+// Global function to run first day streak
+void runFirstDayStreak(int proficiencyLevel) {
+    ProficiencyQuestionManager questionManager;
+    queue<ProficiencyQuestion> questions = questionManager.getQuestionsByProficiency(proficiencyLevel, 6);
+    int score = 0;
+
+    cout << "\n=== First Day Streak - Let's Begin! ===\n";
+    Sleep(500);
+
+    while (!questions.empty()) {
+        ProficiencyQuestion currentQuestion = questions.front();
+        
+        cout << "\nQuestion: " << currentQuestion.text << "\n\n";
+
+        for (size_t i = 0; i < currentQuestion.options.size(); i++) {
+            cout << i + 1 << ". " << currentQuestion.options[i] << "\n";
+        }
+         if(currentQuestion.questionNumber == 1) {
+              playAudio1("Audiofiles/s1.wav");
+         }
+        else if(currentQuestion.questionNumber == 2) {
+            playAudio1("Audiofiles/s2.wav");
+          }
+        else if(currentQuestion.questionNumber == 3) {
+            playAudio1("Audiofiles/s3.wav");
+          }
+        else if(currentQuestion.questionNumber == 4) {
+            playAudio1("Audiofiles/s4.wav");
+          }
+        else if(currentQuestion.questionNumber == 5) {
+            playAudio1("Audiofiles/s5.wav");
+          }
+        else if(currentQuestion.questionNumber == 6) {
+            playAudio1("Audiofiles/s6.wav");
+          }
+        else if(currentQuestion.questionNumber == 7) {
+            playAudio1("Audiofiles/s7.wav");
+          }
+        else if(currentQuestion.questionNumber == 8) {
+            playAudio1("Audiofiles/s8.wav");
+          }
+        else if(currentQuestion.questionNumber == 9) {
+            playAudio1("Audiofiles/s9.wav");
+          }
+        else if(currentQuestion.questionNumber == 10) {
+            playAudio1("Audiofiles/s10.wav");
+          }
+
+        cout << "\nYour answer (1-" << currentQuestion.options.size() << "): ";
+        int answer;
+        cin >> answer;
+        cin.ignore();
+
+        if (answer == currentQuestion.correctAnswer) {
+            cout << "\nCorrect! Well done!\n";
+            score++;
+        } else {
+            cout << "\nIncorrect. The correct answer was: " 
+                 << currentQuestion.options[currentQuestion.correctAnswer - 1] << "\n";
+        }
+
+        questions.pop();
+        cout << "\nPress Enter to continue...";
+        cin.get();
+        system("cls");
+    }
+
+    cout << "\n=== First Day Streak Complete! ===\n";
+    cout << "Score: " << score << "/6\n";
+    cout << "Keep up the good work!\n";
+    Sleep(2000);
+}
+
 
 // Stack for wrong answers
 class WrongAnswerStack {
@@ -466,7 +644,7 @@ class LeximoApp {
 private:
     AudioManager audioManager;
     UserManager userManager;
-    QuestionBank questionBank;
+   // QuestionBank questionBank;
     ProgressTracker progressTracker;
     vector<Message> messages;
     map<int, Message> proficiencyResponses;
@@ -545,7 +723,7 @@ private:
             if (!userManager.isValidPassword(password)) {
                 gotoRowCol(17, 25);
                 cout << "Password must be 8 or more characters/words combined!\n";
-                Sleep(2000);
+                Sleep(1000);
                 continue;
             }
 
@@ -556,86 +734,6 @@ private:
         user.password = password;
         userManager.saveUser(user);
         return user;
-    }
-
-    
-    
-    void runPracticeExercise() {
-        clearScreen();
-        displayLogo();
-        
-        cout << "\nHere's your first day streak! Let's begin the practice exercise.\n\n";
-        Sleep(2000);
-        
-        int baseQuestions;
-        if (currentUser.dailyGoal <= 5) baseQuestions = 7;
-        else if (currentUser.dailyGoal <= 10) baseQuestions = 15;
-        else if (currentUser.dailyGoal <= 15) baseQuestions = 40; 
-        
-        vector<Question> questions = questionBank.getQuestionsByProficiency(
-            currentUser.proficiencyLevel, 
-            baseQuestions
-        );
-        
-        int progress = 0;
-        for (const Question& q : questions) {
-            displayQuestion(q);
-            if (!handleAnswer(q)) {
-                progressTracker.addWrongAnswer(q);
-            }
-            progress++;
-            progressTracker.displayProgressBar(20, 30, (progress * 10) / questions.size());
-        }
-        
-        // Handle review of wrong answers
-        if (progressTracker.hasQuestionsForReview()) {
-            cout << "\nLet's review the questions you missed:\n";
-            Sleep(1500);
-            
-            progressTracker.prepareReview();
-            while (progressTracker.hasQuestionsForReview()) {
-                Question q = progressTracker.getNextReviewQuestion();
-                displayQuestion(q);
-                handleAnswer(q);
-            }
-        }
-        
-        progressTracker.incrementStreak();
-        cout << "\nCongratulations! You've completed your first practice session!\n";
-        cout << "Current streak: " << progressTracker.getStreak() << " day(s)\n";
-        Sleep(3000);
-    }
-    
-    void displayQuestion(const Question& q) {
-        clearScreen();
-        displayLogo();
-        
-        cout << "\nQuestion: " << q.text << "\n\n";
-        
-        if (q.isPronunciation) {
-            audioManager.playAudio(q.audioFile);
-            cout << "Listen to the audio and repeat.\n";
-        } else {
-            for (size_t i = 0; i < q.options.size(); i++) {
-                cout << i + 1 << ". " << q.options[i] << "\n";
-            }
-        }
-    }
-    
-    bool handleAnswer(const Question& q) {
-        if (q.isPronunciation) {
-            cout << "\nPress any key when you're done practicing...\n";
-           // cin.ignore();
-            cin.get();
-            return true; // Pronunciation practice is always marked as correct
-        } else {
-            cout << "\nEnter your answer (1-" << q.options.size() << "): ";
-            int answer;
-            cin >> answer;
-            cin.ignore();
-            
-            return answer == q.correctAnswer;
-        }
     }
 
 public:
@@ -678,7 +776,7 @@ public:
             } else {
                 gotoRowCol(18, 25);
                 cout << "Incorrect password!\n";
-                Sleep(2000);
+                Sleep(500);
             }
         } while (!loginSuccess);
 
@@ -716,10 +814,10 @@ public:
     void runInitialQuestionnaire() {
         // Introduction
         displayMessage(messages[1].text, true, messages[1].audioFile);  // Hi there! I am Leximo
-        Sleep(2000);
+        Sleep(500);
         
         displayMessage(messages[2].text, true, messages[2].audioFile);  // Just 5 quick questions
-        Sleep(2000);
+        Sleep(500);
 
         // Source question
         displayMessage(messages[3].text, true, messages[3].audioFile);  // How did you hear about Leximo?
@@ -736,10 +834,10 @@ public:
         cout << "4. I can talk about various topics\n";
         cout << "5. I can discuss most topics in detail\n\n";
         
-        int proficiency = getValidInput(1, 5);
+        proficiency = getValidInput(1, 5);
         currentUser.proficiencyLevel = proficiency;
         displayMessage(proficiencyResponses[proficiency].text, true, proficiencyResponses[proficiency].audioFile);
-        Sleep(2000);
+        Sleep(500);
 
         // Learning goals
         displayMessage(messages[5].text, true, messages[5].audioFile);  // Why are you learning English?
@@ -752,12 +850,12 @@ public:
 
         // Show response to learning goals
         displayMessage(messages[6].text, true, messages[6].audioFile);  // Great reasons to learn!
-        Sleep(2000);
+        Sleep(500);
 
         // Daily goal setting
         vector<int> dailyGoals = {5, 10, 15, 30};
         displayMessage(messages[7].text, true, messages[7].audioFile);  // Great reasons to learn!
-        Sleep(2000);
+        Sleep(500);
         for (size_t i = 0; i < dailyGoals.size(); i++) {
             cout << i + 1 << ". " << dailyGoals[i] << " minutes/day\n";
         }
@@ -776,30 +874,18 @@ public:
     void run() {
         displayLogo();
         gotoRowCol(15, 30);
-        cout << "1. Get Started\n";
-        gotoRowCol(16, 30);
-        cout << "2. I Already Have an Account\n";
-        gotoRowCol(18, 30);
-        cout << "Enter your choice: ";
-
-        int choice = getValidInput(1, 2);
-
-        if (choice == 1) {
+        
             displayMessage(messages[0].text, true, messages[0].audioFile);
-            Sleep(2000);
+            Sleep(500);
             
             currentUser = handleSignup();
             runInitialQuestionnaire();
-            runPracticeExercise(); // Add this line to start practice after questionnaire
-        } else {
-            currentUser = handleLogin();
-        }
-
+           // runPracticeExercise(); // Add this line to start practice after questionnaire
+             runFirstDayStreak(proficiency);
         clearScreen();
         displayLogo();
-        gotoRowCol(15, 25);
-        cout << "Welcome to LEXIMO, " << currentUser.username << "!\n";
-        Sleep(2000);
+        gotoRowCol(15, 30);
+
     }
 };
 // Forward declarations
@@ -831,11 +917,397 @@ public:
         words.push_back(Word(word, meaning));
     }
 
-    void displayWords() {
-        cout << "\n=== " << name << " ===\n";
+    void displayWords(int c_choice) {
+       if (c_choice==1)
+       {
+                   int choice1;
+        
+        for (int j = 0; j < words.size(); j++)
+         {
+             system("cls");
+             cout << "\n=== " << name << " ===\n";
         for (int i = 0; i < words.size(); i++) {
             cout << i + 1 << ". " << words[i].word << endl;
         }
+    cout << "Type the word number you wish to learn or press zero to Exit: ";
+    cin >> choice1;
+
+    if (choice1 == 0)
+    {
+        break; 
+    }
+    else if (choice1 == 1)
+    {
+        playAudio1("Audiofiles/hippopotamus.wav");
+    }
+    else if (choice1 == 2)
+    {
+        playAudio1("Audiofiles/rhinoceros.wav");
+    }
+    else if (choice1 == 3)
+    {
+        playAudio1("Audiofiles/cheetah.wav");
+    }
+    else if (choice1 == 4)
+    {
+        playAudio1("Audiofiles/giraffe.wav");
+    }
+    else if (choice1 == 5)
+    {
+        playAudio1("Audiofiles/penguin.wav");
+    }
+    else if (choice1 == 6)
+    {
+        playAudio1("Audiofiles/zebra.wav");
+    }
+    else if (choice1 == 7)
+    {
+        playAudio1("Audiofiles/octopus.wav");
+    }
+    else if (choice1 == 8)
+    {
+        playAudio1("Audiofiles/platypus.wav");
+    }
+    else
+    {
+        cout << "Invalid input. Try again." << endl;
+        j--; 
+        continue;
+    }
+}
+       }
+       if (c_choice==2)
+       {
+             int choice1;
+        
+        for (int j = 0; j < words.size(); j++)
+         {
+             system("cls");
+             cout << "\n=== " << name << " ===\n";
+        for (int i = 0; i < words.size(); i++) {
+            cout << i + 1 << ". " << words[i].word << endl;
+        }
+    cout << "Type the word number you wish to learn or press zero to Exit: ";
+    cin >> choice1;
+
+    if (choice1 == 0)
+    {
+        break; 
+    }
+    else if (choice1 == 1)
+    {
+        playAudio1("Audiofiles/doctor.wav");
+    }
+    else if (choice1 == 2)
+    {
+        playAudio1("Audiofiles/nurse.wav");
+    }
+    else if (choice1 == 3)
+    {
+        playAudio1("Audiofiles/surgeon.wav");
+    }
+    else if (choice1 == 4)
+    {
+        playAudio1("Audiofiles/pediatrician.wav");
+    }
+    else if (choice1 == 5)
+    {
+        playAudio1("Audiofiles/dentist.wav");
+    }
+    else if (choice1 == 6)
+    {
+        playAudio1("Audiofiles/pharamacist.wav");
+    }
+    else if (choice1 == 7)
+    {
+        playAudio1("Audiofiles/programmer.wav");
+    }
+    else if (choice1 == 8)
+    {
+        playAudio1("Audiofiles/engineer.wav");
+    }
+    else if (choice1 == 9)
+    {
+        playAudio1("Audiofiles/analyst.wav");
+    }
+    else if (choice1 == 10)
+    {
+        playAudio1("Audiofiles/designer.wav");
+    }
+    else if (choice1 == 11)
+    {
+        playAudio1("Audiofiles/developer.wav");
+    }
+    else
+    {
+        cout << "Invalid input. Try again." << endl;
+        j--; 
+        continue;
+    }
+}
+
+       }
+       if (c_choice==3)
+       {
+             int choice1;
+        
+        for (int j = 0; j < words.size(); j++)
+         {
+             system("cls");
+             cout << "\n=== " << name << " ===\n";
+        for (int i = 0; i < words.size(); i++) {
+            cout << i + 1 << ". " << words[i].word << endl;
+        }
+    cout << "Type the word number you wish to learn or press zero to Exit: ";
+    cin >> choice1;
+
+    if (choice1 == 0)
+    {
+        break; 
+    }
+    else if (choice1 == 1)
+    {
+        playAudio1("Audiofiles/apple.wav");
+    }
+    else if (choice1 == 2)
+    {
+        playAudio1("Audiofiles/banana.wav");
+    }
+    else if (choice1 == 3)
+    {
+        playAudio1("Audiofiles/orange.wav");
+    }
+    else if (choice1 == 4)
+    {
+        playAudio1("Audiofiles/grape.wav");
+    }
+    else if (choice1 == 5)
+    {
+        playAudio1("Audiofiles/mango.wav");
+    }
+    else
+    {
+        cout << "Invalid input. Try again." << endl;
+        j--; 
+        continue;
+    }
+}
+       }
+       if (c_choice==4)
+       {
+            int choice1;
+        
+        for (int j = 0; j < words.size(); j++)
+         {
+             system("cls");
+             cout << "\n=== " << name << " ===\n";
+        for (int i = 0; i < words.size(); i++) {
+            cout << i + 1 << ". " << words[i].word << endl;
+        }
+    cout << "Type the word number you wish to learn or press zero to Exit: ";
+    cin >> choice1;
+
+    if (choice1 == 0)
+    {
+        break; 
+    }
+    else if (choice1 == 1)
+    {
+        playAudio1("Audiofiles/carrot.wav");
+    }
+    else if (choice1 == 2)
+    {
+        playAudio1("Audiofiles/potato.wav");
+    }
+    else if (choice1 == 3)
+    {
+        playAudio1("Audiofiles/tomato.wav");
+    }
+    else if (choice1 == 4)
+    {
+        playAudio1("Audiofiles/lettuce.wav");
+    }
+    else if (choice1 == 5)
+    {
+        playAudio1("Audiofiles/cucumber.wav");
+    }
+    else
+    {
+        cout << "Invalid input. Try again." << endl;
+        j--; 
+        continue;
+    }
+}
+       }
+       if (c_choice==5)
+       {
+                int choice1;
+        
+        for (int j = 0; j < words.size(); j++)
+         {
+             system("cls");
+             cout << "\n=== " << name << " ===\n";
+        for (int i = 0; i < words.size(); i++) {
+            cout << i + 1 << ". " << words[i].word << endl;
+        }
+    cout << "Type the word number you wish to learn or press zero to Exit: ";
+    cin >> choice1;
+
+    if (choice1 == 0)
+    {
+        break; 
+    }
+    else if (choice1 == 1)
+    {
+        playAudio1("Audiofiles/smartphone.wav");
+    }
+    else if (choice1 == 2)
+    {
+        playAudio1("Audiofiles/laptop.wav");
+    }
+    else if (choice1 == 3)
+    {
+        playAudio1("Audiofiles/tablet.wav");
+    }
+    else if (choice1 == 4)
+    {
+        playAudio1("Audiofiles/smartwatch.wav");
+    }
+    else if (choice1 == 5)
+    {
+        playAudio1("Audiofiles/app.wav");
+    }
+    else if (choice1 == 6)
+    {
+        playAudio1("Audiofiles/browser.wav");
+    }
+    else if (choice1 == 7)
+    {
+        playAudio1("Audiofiles/operating_system.wav");
+    }
+    else if (choice1 == 8)
+    {
+        playAudio1("Audiofiles/antivirus.wav");
+    }
+    else
+    {
+        cout << "Invalid input. Try again." << endl;
+        j--; 
+        continue;
+    }
+}
+
+       }
+       if (c_choice==6)
+       {
+               int choice1;
+        
+        for (int j = 0; j < words.size(); j++)
+         {
+             system("cls");
+             cout << "\n=== " << name << " ===\n";
+        for (int i = 0; i < words.size(); i++) {
+            cout << i + 1 << ". " << words[i].word << endl;
+        }
+    cout << "Type the word number you wish to learn or press zero to Exit: ";
+    cin >> choice1;
+
+    if (choice1 == 0)
+    {
+        break; 
+    }
+    else if (choice1 == 1)
+    {
+        playAudio1("Audiofiles/aeroplane.wav");
+    }
+    else if (choice1 == 2)
+    {
+        playAudio1("Audiofiles/train.wav");
+    }
+    else if (choice1 == 3)
+    {
+        playAudio1("Audiofiles/bus.wav");
+    }
+    else if (choice1 == 4)
+    {
+        playAudio1("Audiofiles/taxi.wav");
+    }
+    else if (choice1 == 5)
+    {
+        playAudio1("Audiofiles/hotel.wav");
+    }
+    else if (choice1 == 6)
+    {
+        playAudio1("Audiofiles/hostel.wav");
+    }
+    else if (choice1 == 7)
+    {
+        playAudio1("Audiofiles/resort.wav");
+    }
+    else if (choice1 == 8)
+    {
+        playAudio1("Audiofiles/motel.wav");
+    }
+    
+    else
+    {
+        cout << "Invalid input. Try again." << endl;
+        j--; 
+        continue;
+    }
+}
+       }
+       if (c_choice==7)
+       {
+                 int choice1;
+        
+        for (int j = 0; j < words.size(); j++)
+         {
+             system("cls");
+             cout << "\n=== " << name << " ===\n";
+        for (int i = 0; i < words.size(); i++) {
+            cout << i + 1 << ". " << words[i].word << endl;
+        }
+    cout << "Type the word number you wish to learn or press zero to Exit: ";
+    cin >> choice1;
+
+    if (choice1 == 0)
+    {
+        break; 
+    }
+    else if (choice1 == 1)
+    {
+        playAudio1("Audiofiles/football.wav");
+    }
+    else if (choice1 == 2)
+    {
+        playAudio1("Audiofiles/basketball.wav");
+    }
+    else if (choice1 == 3)
+    {
+        playAudio1("Audiofiles/volleyball.wav");
+    }
+    else if (choice1 == 4)
+    {
+        playAudio1("Audiofiles/swimming.wav");
+    }
+    else if (choice1 == 5)
+    {
+        playAudio1("Audiofiles/tennis.wav");
+    }
+    else if (choice1 == 6)
+    {
+        playAudio1("Audiofiles/golf.wav");
+    }
+    else
+    {
+        cout << "Invalid input. Try again." << endl;
+        j--; 
+        continue;
+    }
+}
+       }
+
     }
 };
 
@@ -848,9 +1320,22 @@ public:
 
     Story(string t, string c) : title(t), content(c) {}
 
-    void display() const {
+    void display(int count) const {
         cout << "\n=== " << title << " ===\n\n";
         cout << content << endl;
+        if(count==1)
+        {
+            playAudio1("Audiofiles/story1.wav");
+        }
+        else if(count==2)
+        {
+            playAudio1("Audiofiles/story2.wav");
+        }
+        else if(count==3)
+        {
+            playAudio1("Audiofiles/story3.wav");
+        }
+
     }
 };
 
@@ -872,6 +1357,51 @@ public:
         for (int i = 0; i < options.size(); i++) {
             cout << char('A' + i) << ") " << options[i] << endl;
         }
+        if (num==0)
+        {
+            return;
+        }
+        if (num==1)
+            {
+                playAudio1("Audiofiles/quiz_q1.wav");
+            }
+            else if(num==2)
+            {
+                playAudio1("Audiofiles/quiz_q4.wav");
+            }
+             else if(num==3)
+            {
+                playAudio1("Audiofiles/quiz_q7.wav");
+            }
+             else if(num==4)
+            {
+                playAudio1("Audiofiles/quiz_q10.wav");
+            }
+             else if(num==5)
+            {
+                playAudio1("Audiofiles/quiz_q2.wav");
+            }
+             else if(num==6)
+            {
+                playAudio1("Audiofiles/quiz_q5.wav");
+            }
+             else if(num==7)
+            {
+                playAudio1("Audiofiles/quiz_q8.wav");
+            }
+             else if(num==8)
+            {
+                playAudio1("Audiofiles/quiz_q3.wav");
+            }
+             else if(num==9)
+            {
+                playAudio1("Audiofiles/quiz_q6.wav");
+            }
+             else if(num==10)
+            {
+                playAudio1("Audiofiles/quiz_q9.wav");
+            }
+            
     }
 
     bool checkAnswer(char answer) {
@@ -1151,42 +1681,8 @@ public:
             delete q;
         }
     }
-// IELTS Listening Practice
-class IELTSQuestion {
-public:
-    string audioText;  // Simulating audio with text for now
-    string question;
-    string correctAnswer;
-    vector<string> options;
 
-    IELTSQuestion(string text, string q, string ans, vector<string> opts)
-        : audioText(text), question(q), correctAnswer(ans), options(opts) {}
 
-    bool practice() {
-        cout << "\n=== IELTS Listening Practice ===\n\n";
-        cout << "Listen carefully (simulated audio):\n" << audioText << endl;
-        cout << "\nQuestion: " << question << endl;
-
-        for(size_t i = 0; i < options.size(); i++) {
-            cout << char('A' + i) << ") " << options[i] << endl;
-        }
-
-        time_t start = time(nullptr);
-        cout << "\nYour answer (A/B/C/D): ";
-        string answer;
-        getline(cin, answer);
-        time_t end = time(nullptr);
-
-        if(end - start > 60) {
-            cout << "\nTime's up! The correct answer was: " << correctAnswer << endl;
-            return false;
-        }
-
-        return (toupper(answer[0]) == correctAnswer[0]);
-    }
-};
-
-// Quiz Card Game
 class QuizCard {
 public:
     string question;
@@ -1216,74 +1712,224 @@ public:
     }
 };
 
-vector<IELTSQuestion> initializeIELTSQuestions() {
-    vector<IELTSQuestion> questions;
-
-    questions.push_back(IELTSQuestion(
-        "The university library will be closed for renovation from July 1st to August 15th. "
-        "During this period, students can access the online resources and use the temporary "
-        "study space in Building B.",
-        "When will the library reopen?",
-        "August 15th",
-        {"July 1st", "August 1st", "August 15th", "September 1st"}
+queue<QuizCard> initializeIELTSQuestions() {
+    queue<QuizCard> questionQueue;
+    
+    // First Conversation Questions
+    questionQueue.push(QuizCard(
+        "What position was the candidate interviewing for?",
+        "Senior Developer",
+        {"Junior Developer", "Senior Developer", "Project Manager", "System Admin"}
     ));
 
-    // Add more questions as needed
-    return questions;
-}
-
-vector<QuizCard> initializeQuizCards() {
-    vector<QuizCard> cards;
-
-    cards.push_back(QuizCard(
-        "What is the correct meaning of 'ubiquitous'?",
-        "Present everywhere",
-        {"Present everywhere", "Very rare", "Unusual", "Unique"}
+    questionQueue.push(QuizCard(
+        "How many years of experience did the candidate mention?",
+        "Five years",
+        {"Three years", "Four years", "Five years", "Six years"}
     ));
 
-    // Add more cards as needed
-    return cards;
-}
+    questionQueue.push(QuizCard(
+        "What type of project did the candidate work on?",
+        "Cloud migration",
+        {"Website development", "Mobile app", "Cloud migration", "Database design"}
+    ));
 
-void practiceIELTS(vector<IELTSQuestion>& questions) {
+    questionQueue.push(QuizCard(
+        "How many concurrent users did the candidate's system handle?",
+        "50,000",
+        {"15,000", "30,000", "50,000", "100,000"}
+    ));
+
+    questionQueue.push(QuizCard(
+        "What cloud platform was specifically mentioned in the interview?",
+        "AWS",
+        {"Azure", "AWS", "Google Cloud", "Oracle Cloud"}
+    ));
+
+    // Second Conversation Questions
+    questionQueue.push(QuizCard(
+        "How many cases were included in the research study?",
+        "2,347",
+        {"2,374", "2,347", "2,437", "2,734"}
+    ));
+
+    questionQueue.push(QuizCard(
+        "What was the improvement percentage in detection rates?",
+        "32%",
+        {"23%", "32%", "42%", "52%"}
+    ));
+
+    questionQueue.push(QuizCard(
+        "What specific medical conditions were mentioned?",
+        "Cardiovascular abnormalities",
+        {"Respiratory issues", "Cardiovascular abnormalities", "Bone fractures", "Skin conditions"}
+    ));
+
+    questionQueue.push(QuizCard(
+        "What was the reduction in false positives?",
+        "45%",
+        {"25%", "35%", "45%", "55%"}
+    ));
+
+    questionQueue.push(QuizCard(
+        "What was recommended alongside AI diagnostics?",
+        "Human verification",
+        {"Machine learning", "Human verification", "Regular testing", "Patient monitoring"}
+    ));
+
+    return questionQueue;
+}
+void practiceIELTS() {
+    queue<QuizCard> questions = initializeIELTSQuestions();
+    
     cout << "\n=== IELTS Listening Practice ===\n";
-    int score = 0;
+    
+    // First Conversation
+    cout << "\nFirst Conversation: Job Interview\n";
+    cout << "Press Enter to start listening...";
+    cin.get();
+    
+    system("cls");
+    cout << "\nPlaying first conversation...\n";
+    
+    /* First Conversation Transcript:
+     * ============================
+     * audio1.wav:
+     * gmail
+     */
+    playAudio1("Audiofiles/conversation1.wav");
+    Sleep(1000);
+    
+    /* audio2.wav:
+     * Candidate: "Good morning, Ms. Thompson. I'm Michael Chen. I've been working in software development 
+     * for five years now, and I'm particularly interested in the cloud architecture opportunities at Brightwater."
+     */
+    playAudio1("Audiofiles/conversation2.wav");
+    Sleep(1000);
+    
+    /* audio3.wav:
+     * Interviewer: "Excellent. Could you tell me about your experience with large-scale cloud systems? 
+     * We're particularly interested in your hands-on experience with AWS."
+     */
+    playAudio1("Audiofiles/conversation3.wav");
+    Sleep(1000);
+    
+    /* audio4.wav:
+     * Candidate: "In my current role, I led a major cloud migration project where we moved our monolithic application 
+     * to a microservices architecture on AWS. The system now handles 50,000 concurrent users and has improved 
+     * our response times by 40%."
+     */
+    playAudio1("Audiofiles/conversation4.wav");
+    Sleep(1000);
+    
+    /* audio5.wav:
+     * Interviewer: "That's impressive. Could you elaborate on the specific AWS services you utilized and any 
+     * challenges you encountered during the migration?"
+     */
+    playAudio1("Audiofiles/conversation5.wav");
+    Sleep(2000);
 
-    for(auto& question : questions) {
-        if(question.practice()) {
+    cout << "\nNow answer questions about the conversation you just heard.\n";
+    cout << "Press Enter to start questions...";
+    cin.get();
+    
+    int score = 0;
+    // First conversation questions (5 questions)
+    for (int i = 0; i < 5 && !questions.empty(); i++) {
+        system("cls");
+        cout << "\nQuestion " << (i + 1) << " of 5:\n";
+        
+        QuizCard currentQuestion = questions.front();
+        if (currentQuestion.play()) {
             cout << "\nCorrect!" << endl;
             score++;
         } else {
-            cout << "\nIncorrect." << endl;
+            cout << "\nIncorrect. The correct answer was: " << currentQuestion.answer << endl;
         }
+        questions.pop();
+        
         cout << "\nPress Enter to continue...";
         cin.get();
     }
 
-    cout << "\nFinal Score: " << score << "/" << questions.size() << endl;
-}
+    // Second Conversation
+    system("cls");
+    cout << "\nSecond Conversation: Academic Discussion\n";
+    cout << "Press Enter to start listening...";
+    cin.get();
+    
+    system("cls");
+    cout << "\nPlaying second conversation...\n";
+    
+    /* Second Conversation Transcript:
+     * =============================
+     * audio6.wav:
+     * Professor: "Today we'll be discussing our groundbreaking research on AI applications in healthcare diagnostics. 
+     * Our study, which examined 2,347 cases, showed remarkable improvements in early detection rates."
+     */
+    playAudio1("Audiofiles/conversation6.wav");
+    Sleep(1000);
+    
+    /* audio7.wav:
+     * Student 1: "Could you tell us more about the specific conditions where AI showed the most promise? 
+     * Were there any particular areas where it outperformed traditional methods?"
+     */
+    playAudio1("Audiofiles/conversation7.wav");
+    Sleep(1000);
+    
+    /* audio8.wav:
+     * Professor: "Yes, we found a 32% improvement in early detection rates, particularly in cardiovascular abnormalities. 
+     * The AI system was able to identify subtle patterns that human doctors might have initially missed."
+     */
+    playAudio1("Audiofiles/conversation8.wav");
+    Sleep(1000);
+    
+    /* audio9.wav:
+     * Student 2: "What about the accuracy rates? Were there any false positives or negatives that we should be 
+     * concerned about?"
+     */
+    playAudio1("Audiofiles/conversation9.wav");
+    Sleep(1000);
+    
+    /* audio10.wav:
+     * Professor: "Good question. The AI system actually reduced false positives by 45% compared to traditional 
+     * screening methods. However, we still recommend human verification of all AI-generated diagnoses."
+     */
+    playAudio1("Audiofiles/conversation10.wav");
+    Sleep(2000);
 
-void playQuizGame(vector<QuizCard>& cards) {
-    cout << "\n=== English Quiz Game ===\n";
-    int score = 0;
-
-    for(auto& card : cards) {
-        if(card.play()) {
+    cout << "\nNow answer questions about the second conversation.\n";
+    cout << "Press Enter to start questions...";
+    cin.get();
+    
+    // Second conversation questions (5 questions)
+    for (int i = 0; i < 5 && !questions.empty(); i++) {
+        system("cls");
+        cout << "\nQuestion " << (i + 1) << " of 5:\n";
+        
+        QuizCard currentQuestion = questions.front();
+        if (currentQuestion.play()) {
             cout << "\nCorrect!" << endl;
             score++;
         } else {
-            cout << "\nIncorrect. The correct answer was: " << card.answer << endl;
+            cout << "\nIncorrect. The correct answer was: " << currentQuestion.answer << endl;
         }
+        questions.pop();
+        
         cout << "\nPress Enter to continue...";
         cin.get();
     }
 
-    cout << "\nFinal Score: " << score << "/" << cards.size() << endl;
+    // Display final results
+    system("cls");
+    cout << "\n=== IELTS Listening Test Results ===\n";
+    cout << "Final Score: " << score << "/10\n";
+    cout << "Percentage: " << (score * 10) << "%\n";
+    
+    cout << "\nPress Enter to return to menu...";
+    cin.get();
 }
-
-vector<IELTSQuestion> ieltsQuestions = initializeIELTSQuestions();
-vector<QuizCard> quizCards = initializeQuizCards();
-
+// Your existing premium menu function
 void premiumMenu() {
     system("cls");
     cout << "\n=== Premium Access ===\n";
@@ -1303,7 +1949,7 @@ void premiumMenu() {
 
         while(true) {
             system("cls");
-            cout << "\n=== Welcome to Language Learning App\n";
+            cout << "\n=== Welcome to Language Learning App ===\n";
             cout << "1. Speak with ME\n";
             cout << "2. Listen and Practice\n";
             cout << "3. Mistakes\n";
@@ -1325,14 +1971,14 @@ void premiumMenu() {
                 reviewMistakes();
             }
             else if(choice == "4") {
-                practiceIELTS(ieltsQuestions);
+                practiceIELTS();
             }
             else if(choice == "5") {
-                playQuizGame(quizCards);
+                playQuizGame();
             }
             else if(choice == "6") break;
 
-            if(choice != "7") {
+            if(choice != "6") {
                 cout << "\nPress Enter to continue...";
                 cin.get();
             }
@@ -1341,38 +1987,54 @@ void premiumMenu() {
         cout << "\nInvalid code!" << endl;
     }
 }
+void playQuizGame()
 
-    void displayMainMenu() {
-        while (true) {
-            system("cls"); // Clear screen
-            cout << "\n=== Welcome to Language Learning App, " << userName << "! ===\n";
-            cout << "1. Speak with ME\n";
-            cout << "2. Listen and Practice\n";
-            cout << "3. Mistakes\n";
-            cout << "4. View Progress\n";
-            cout << "5. Premium Menu\n";
-            cout << "6. Exit\n";
-            cout << "Choose an option: ";
+{
+    FlashcardQuiz game;
+    game.startQuiz();  
+}
+// Your existing main menu function
+void displayMainMenu() {
+    while (true) {
+        system("cls");
+        cout << "\n=== Welcome to Language Learning App ===\n";
+        cout << "1. Speak with ME\n";
+        cout << "2. Listen and Practice\n";
+        cout << "3. Mistakes\n";
+        cout << "4. View Progress\n";
+        cout << "5. Premium Menu\n";
+        cout << "6. Exit\n";
+        cout << "Choose an option: ";
 
-            int choice;
-            cin >> choice;
-            cin.ignore();
-            system("cls");
-            switch (choice) {
-                case 1: speakWithMe(); break;
-                case 2: listenAndPractice(); break;
-                case 3: reviewMistakes(); break;
-                case 4: viewProgress(); break;
-                case 5: premiumMenu(); break;
-                case 6:
-                    cout << "\nThank you for learning with us, " << userName << "!\n";
-                    return;
-                default:
-                    cout << "Invalid choice! Press Enter to continue...";
-                    cin.get();
-            }
+        string choice;
+        getline(cin, choice);
+
+        system("cls");
+        if(choice == "1") {
+            speakWithMe();
+        }
+        else if(choice == "2") {
+            listenAndPractice();
+        }
+        else if(choice == "3") {
+            reviewMistakes();
+        }
+        else if(choice == "4") {
+            viewProgress();
+        }
+        else if(choice == "5") {
+            premiumMenu();
+        }
+        else if(choice == "6") {
+            cout << "\nThank you for learning with us!\n";
+            break;
+        }
+        else {
+            cout << "Invalid choice! Press Enter to continue...";
+            cin.get();
         }
     }
+}
 
     void speakWithMe() {
         while (true) {
@@ -1391,7 +2053,7 @@ void premiumMenu() {
 
             if (choice == 0) break;
             if (choice > 0 && choice <= categories.size()) {
-                categories[choice - 1].displayWords();
+                categories[choice - 1].displayWords(choice);
                 cout << "\nPress Enter to continue...";
                 cin.get();
                 system("cls");
@@ -1401,12 +2063,14 @@ void premiumMenu() {
 
     void listenAndPractice() {
         // Show stories
+        int count=1;
         for (const Story& story : stories) {
             system("cls");
-            story.display();
+            story.display(count);
             cout << "\nPress Enter to continue...";
             cin.get();
             system("cls");
+            count++;
         }
 
         // Ask if user wants to take quiz
@@ -1470,7 +2134,7 @@ void premiumMenu() {
             Ques* q = mistakeQueue.front();
             mistakeQueue.pop();
 
-            q->display(1);
+            q->display(0);
             cout << "Your answer (A/B/C/D): ";
             char answer;
             cin >> answer;
@@ -1514,30 +2178,11 @@ void premiumMenu() {
     }
 };
 
-int main() {
-    try {
-        SetConsoleOutputCP(CP_UTF8);
-        
-        displayLogo();
-        gotoRowCol(15, 30);
-        cout << "1. Get Started\n";
-        gotoRowCol(16, 30);
-        cout << "2. I Already Have an Account\n";
-        gotoRowCol(18, 30);
-        cout << "Enter your choice: ";
 
-        int choice;
-        cin >> choice;
-        cin.ignore();
 
-        if (choice == 1) {
-            // New user path
-            LeximoApp app;
-            app.run();
-        } 
-        else if (choice == 2) {
-            // Existing user path
-            User user;
+void login()
+{
+    User user;
             string username, password;
             bool validUsername = false;
             UserManager userManager;
@@ -1588,6 +2233,33 @@ int main() {
             // After successful login, start LanguageLearningApp
             LanguageLearningApp app;
             app.displayMainMenu();
+}
+int main() {
+    try {
+        SetConsoleOutputCP(CP_UTF8);
+        
+        displayLogo();
+        gotoRowCol(15, 30);
+        cout << "1. Get Started\n";
+        gotoRowCol(16, 30);
+        cout << "2. I Already Have an Account\n";
+        gotoRowCol(18, 30);
+        cout << "Enter your choice: ";
+
+        int choice;
+        cin >> choice;
+        cin.ignore();
+
+        if (choice == 1) {
+            // New user path
+            LeximoApp app;
+            app.run();
+            LanguageLearningApp app1;
+            app1.displayMainMenu();
+        } 
+        else if (choice == 2) {
+        login();
+
         }
 
         return 0;
